@@ -82,15 +82,19 @@ return /******/ (function(modules) { // webpackBootstrap
 	    value: {
 	      audio: true,
 	      height: 480,
-	      width: 640
+	      width: 640,
+	      screenshotFormat: 'image/webp',
+	      onUserMedia: function onUserMedia() {}
 	    },
 	    enumerable: true
 	  }, {
 	    key: 'propTypes',
 	    value: {
 	      audio: _react.PropTypes.bool,
+	      onUserMedia: _react.PropTypes.func,
 	      height: _react.PropTypes.oneOfType([_react.PropTypes.number, _react.PropTypes.string]),
-	      width: _react.PropTypes.oneOfType([_react.PropTypes.number, _react.PropTypes.string])
+	      width: _react.PropTypes.oneOfType([_react.PropTypes.number, _react.PropTypes.string]),
+	      screenshotFormat: _react.PropTypes.oneOf(['image/webp', 'image/png', 'image/jpeg'])
 	    },
 	    enumerable: true
 	  }, {
@@ -146,7 +150,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	        });
 	      }, function (e) {
 	        Webcam.mountedInstances.forEach(function (instance) {
-	          return instance.handleUserMedia(error);
+	          return instance.handleUserMedia(e);
 	        });
 	      });
 	    };
@@ -154,20 +158,39 @@ return /******/ (function(modules) { // webpackBootstrap
 	    if (this.props.audioSource && this.props.videoSource) {
 	      sourceSelected(this.props.audioSource, this.props.videoSource);
 	    } else {
-	      MediaStreamTrack.getSources(function (sourceInfos) {
-	        var audioSource = null;
-	        var videoSource = null;
+	      if ('mediaDevices' in navigator) {
+	        navigator.mediaDevices.enumerateDevices().then(function (devices) {
+	          var audioSource = null;
+	          var videoSource = null;
 
-	        sourceInfos.forEach(function (sourceInfo) {
-	          if (sourceInfo.kind === 'audio') {
-	            audioSource = sourceInfo.id;
-	          } else if (sourceInfo.kind === 'video') {
-	            videoSource = sourceInfo.id;
-	          }
+	          devices.forEach(function (device) {
+	            if (device.kind === 'audio') {
+	              audioSource = device.id;
+	            } else if (device.kind === 'video') {
+	              videoSource = device.id;
+	            }
+	          });
+
+	          sourceSelected(audioSource, videoSource);
+	        })['catch'](function (error) {
+	          return console.log(error.name + ": " + error.message);
 	        });
+	      } else {
+	        MediaStreamTrack.getSources(function (sources) {
+	          var audioSource = null;
+	          var videoSource = null;
 
-	        sourceSelected(audioSource, videoSource);
-	      });
+	          sources.forEach(function (source) {
+	            if (source.kind === 'audio') {
+	              audioSource = source.id;
+	            } else if (source.kind === 'video') {
+	              videoSource = source.id;
+	            }
+	          });
+
+	          sourceSelected(audioSource, videoSource);
+	        });
+	      }
 	    }
 
 	    Webcam.userMediaRequested = true;
@@ -184,10 +207,13 @@ return /******/ (function(modules) { // webpackBootstrap
 
 	    var src = window.URL.createObjectURL(stream);
 
+	    this.stream = stream;
 	    this.setState({
 	      hasUserMedia: true,
 	      src: src
 	    });
+
+	    this.props.onUserMedia();
 	  };
 
 	  Webcam.prototype.componentWillUnmount = function componentWillUnmount() {
@@ -195,22 +221,37 @@ return /******/ (function(modules) { // webpackBootstrap
 	    Webcam.mountedInstances.splice(index, 1);
 
 	    if (Webcam.mountedInstances.length === 0 && this.state.hasUserMedia) {
+	      this.stream.stop();
+	      Webcam.userMediaRequested = false;
 	      window.URL.revokeObjectURL(this.state.src);
 	    }
 	  };
 
 	  Webcam.prototype.getScreenshot = function getScreenshot() {
-	    if (!this.state.hasUserMedia) return;
+	    if (!this.state.hasUserMedia) return null;
 
-	    var canvas = document.createElement('canvas');
-	    var video = _react2['default'].findDOMNode(this.refs.video);
-	    canvas.height = video.clientHeight;
-	    canvas.width = video.clientWidth;
+	    var canvas = this.getCanvas();
+	    return canvas.toDataURL(this.props.screenshotFormat);
+	  };
 
-	    var ctx = canvas.getContext('2d');
+	  Webcam.prototype.getCanvas = function getCanvas() {
+	    if (!this.state.hasUserMedia) return null;
+
+	    var video = _react2['default'].findDOMNode(this);
+	    if (!this.ctx) {
+	      var _canvas = document.createElement('canvas');
+	      _canvas.height = video.clientHeight;
+	      _canvas.width = video.clientWidth;
+	      this.canvas = _canvas;
+	      this.ctx = _canvas.getContext('2d');
+	    }
+
+	    var ctx = this.ctx;
+	    var canvas = this.canvas;
+
 	    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-	    return canvas.toDataURL('image/webp');
+	    return canvas;
 	  };
 
 	  Webcam.prototype.render = function render() {
@@ -218,8 +259,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	      autoPlay: true,
 	      width: this.props.width,
 	      height: this.props.height,
-	      src: this.state.src,
-	      ref: 'video'
+	      src: this.state.src
 	    });
 	  };
 
