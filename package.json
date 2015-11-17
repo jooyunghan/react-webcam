@@ -25,7 +25,8 @@
   },
   "homepage": "https://github.com/cezary/react-webcam",
   "peerDependencies": {
-    "react": ">=0.13.0"
+    "react": ">=0.13.0",
+    "react-dom": ">=0.13.0"
   },
   "devDependencies": {
     "babel": "^5.6.7",
